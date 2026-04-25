@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS vehicule (
 
 CREATE TABLE IF NOT EXISTS mesure (
   id_mesure INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  valeur DECIMAL(10,2) NOT NULL,
+  valeur DECIMAL(10,2) NULL,
   unite VARCHAR(30) NOT NULL,
   type_mesure VARCHAR(100) NOT NULL,
   horodatage DATETIME NOT NULL,
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS capteur (
   type_capteur VARCHAR(100) NOT NULL,
   localisation VARCHAR(255) NOT NULL,
   date_installation DATE NOT NULL,
-  etat_capteur ENUM('incatif', 'actif', 'signale', 'en maintenance', 'hors service') NOT NULL,
+  etat_capteur ENUM('inactif', 'actif', 'signale', 'en maintenance', 'hors service') NOT NULL,
   id_mesure INT UNSIGNED NOT NULL,
   PRIMARY KEY (id_capteur),
   INDEX idx_capteur_type (type_capteur),
