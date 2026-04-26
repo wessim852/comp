@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime, timedelta
 
 from automata import (
+    build_automaton_dot,
     current_state,
     detect_sensor_value_alerts,
     evaluate_actions,
@@ -159,6 +160,26 @@ class AutomataTests(unittest.TestCase):
         )
 
         self.assertEqual(actions[0]["id_capteur"], 2)
+
+    def test_build_automaton_dot_highlights_initial_transition_and_current_state(self) -> None:
+        result = validate_sequence(
+            "capteur",
+            ["installation", "detection anomalie", "reparation"],
+            initial_state="inactif",
+        )
+
+        dot = build_automaton_dot(
+            "capteur",
+            initial_state=result.initial_state,
+            history=result.history,
+            current_state=result.current_state,
+        )
+
+        self.assertIn('state_inactif [label="inactif", fillcolor="#7dd3fc"', dot)
+        self.assertIn('state_en_maintenance [label="en maintenance", fillcolor="#fca5a5"', dot)
+        self.assertIn('state_inactif -> state_actif [label="installation", color="#16a34a"', dot)
+        self.assertIn('state_actif -> state_signale [label="detection anomalie", color="#16a34a"', dot)
+        self.assertIn('state_signale -> state_en_maintenance [label="reparation", color="#16a34a"', dot)
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from math import isnan
+import re
 from typing import Any
 
 
@@ -52,6 +53,15 @@ class Automaton:
     def normalize_event(self, event: str) -> str:
         key = normalize_label(event)
         return self.aliases.get(key, key)
+
+
+def _dot_id(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", normalize_label(value)).strip("_")
+    return f"state_{slug or 'node'}"
+
+
+def _dot_label(value: str) -> str:
+    return value.replace('"', '\\"')
 
 
 CAPTEUR = Automaton(
@@ -212,6 +222,71 @@ def current_state(
     if not result.valid:
         raise ValueError(result.errors[0])
     return result.current_state
+
+
+def build_automaton_dot(
+    entity_type: str,
+    initial_state: str | None = None,
+    history: list[TransitionRecord] | None = None,
+    current_state: str | None = None,
+) -> str:
+    automaton = get_automaton(entity_type)
+    start_state = (
+        automaton.normalize_state(initial_state)
+        if initial_state is not None
+        else automaton.initial_state
+    )
+    traversed_transitions = {
+        (record.from_state, record.normalized_event, record.to_state)
+        for record in (history or [])
+    }
+    active_state = (
+        automaton.normalize_state(current_state)
+        if current_state is not None
+        else start_state
+    )
+
+    lines = [
+        "digraph Automaton {",
+        '  rankdir=LR;',
+        '  bgcolor="transparent";',
+        '  graph [fontname="Helvetica"];',
+        '  node [shape=circle, style=filled, fillcolor="white", color="#444444", fontcolor="#111111", penwidth=2, fontname="Helvetica"];',
+        '  edge [color="#8a8a8a", fontcolor="#333333", penwidth=2, fontname="Helvetica"];',
+    ]
+
+    for state in sorted(automaton.states):
+        fillcolor = "white"
+        color = "#444444"
+        fontcolor = "#111111"
+        if state == start_state:
+            fillcolor = "#7dd3fc"
+            color = "#0891b2"
+        if state == active_state:
+            fillcolor = "#fca5a5"
+            color = "#dc2626"
+            fontcolor = "#7f1d1d"
+        lines.append(
+            f'  {_dot_id(state)} [label="{_dot_label(state)}", fillcolor="{fillcolor}", color="{color}", fontcolor="{fontcolor}"];'
+        )
+
+    lines.append('  __start__ [shape=point, width=0.15, color="#0891b2"];')
+    lines.append(f'  __start__ -> {_dot_id(start_state)} [color="#0891b2", penwidth=2.5];')
+
+    for (from_state, event), to_state in sorted(automaton.transitions.items()):
+        color = "#8a8a8a"
+        penwidth = 2
+        fontcolor = "#333333"
+        if (from_state, event, to_state) in traversed_transitions:
+            color = "#16a34a"
+            penwidth = 3
+            fontcolor = "#166534"
+        lines.append(
+            f'  {_dot_id(from_state)} -> {_dot_id(to_state)} [label="{_dot_label(event)}", color="{color}", fontcolor="{fontcolor}", penwidth={penwidth}];'
+        )
+
+    lines.append("}")
+    return "\n".join(lines)
 
 
 def evaluate_actions(

@@ -93,12 +93,10 @@ L'application permet de :
 
 Le module `ai_reports.py` analyse les capteurs, mesures, zones polluées et interventions ouvertes. Il produit un rapport en français et une liste d'actions prioritaires.
 
-Par défaut, le rapport est généré localement afin que l'application reste utilisable sans clé API. Pour utiliser un modèle compatible OpenAI Chat Completions, renseigner ces variables d'environnement ou les champs de l'onglet `Rapports IA` :
+Par défaut, le rapport utilise Hugging Face Inference Providers avec Llama 3.1 via l'endpoint compatible OpenAI Chat Completions. Le token peut être placé dans `.env` :
 
 ```bash
-export AI_REPORT_API_KEY="..."
-export AI_REPORT_BASE_URL="https://api.exemple.com/v1"
-export AI_REPORT_MODEL="grok-ou-kimi"
+lama_apikey="hf_..."
 ```
 
-Si l'appel distant échoue, l'application revient automatiquement au générateur local.
+Variables équivalentes supportées : `HF_TOKEN`, `HUGGINGFACEHUB_API_TOKEN` ou `AI_REPORT_API_KEY`. Le modèle par défaut est `meta-llama/Llama-3.1-8B-Instruct:novita` et la base URL par défaut est `https://router.huggingface.co/v1`. Si l'appel distant échoue ou si aucun token n'est configuré, l'application revient automatiquement au générateur local.

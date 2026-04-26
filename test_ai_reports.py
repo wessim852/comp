@@ -1,5 +1,8 @@
 import unittest
 from datetime import datetime
+from os import environ
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import pandas as pd
@@ -8,6 +11,7 @@ from ai_reports import (
     AIProviderConfig,
     build_report_context,
     generate_ai_report,
+    load_dotenv_values,
     suggest_actions,
 )
 
@@ -150,15 +154,11 @@ class AIReportTests(unittest.TestCase):
 
     @patch("ai_reports.generate_remote_report", return_value="Rapport distant valide")
     def test_remote_report_is_used_when_provider_succeeds(self, _remote) -> None:
-        config = AIProviderConfig(
-            api_key="secret",
-            base_url="https://example.test/v1",
-            model="grok-demo",
-        )
+        config = AIProviderConfig(api_key="secret")
 
         result = generate_ai_report(sample_context(), config)
 
-        self.assertEqual(result["source"], "grok-demo")
+        self.assertEqual(result["source"], "meta-llama/Llama-3.1-8B-Instruct:novita")
         self.assertEqual(result["report"], "Rapport distant valide")
 
     def test_disallowed_provider_url_scheme_falls_back_to_local_report(self) -> None:
@@ -172,6 +172,38 @@ class AIReportTests(unittest.TestCase):
 
         self.assertEqual(result["source"], "local")
         self.assertIn("scheme non autorise", result["error"])
+
+    def test_dotenv_lama_apikey_configures_hugging_face_defaults(self) -> None:
+        with TemporaryDirectory() as tempdir:
+            env_path = Path(tempdir) / ".env"
+            env_path.write_text("lama_apikey=hf_test_token\n", encoding="utf-8")
+
+            with patch.dict(
+                environ,
+                {
+                    "AI_REPORT_API_KEY": "",
+                    "HF_TOKEN": "",
+                    "HUGGINGFACEHUB_API_TOKEN": "",
+                    "lama_apikey": "",
+                    "LLAMA_APIKEY": "",
+                    "AI_REPORT_BASE_URL": "",
+                    "AI_REPORT_MODEL": "",
+                    "HF_REPORT_MODEL": "",
+                },
+                clear=False,
+            ), patch("ai_reports.DOTENV_PATH", env_path):
+                config = AIProviderConfig.from_env()
+
+        self.assertEqual(config.api_key, "hf_test_token")
+        self.assertEqual(config.base_url, "https://router.huggingface.co/v1")
+        self.assertEqual(config.model, "meta-llama/Llama-3.1-8B-Instruct:novita")
+
+    def test_dotenv_parser_handles_quotes(self) -> None:
+        with TemporaryDirectory() as tempdir:
+            env_path = Path(tempdir) / ".env"
+            env_path.write_text('lama_apikey="hf_test_token"\n', encoding="utf-8")
+
+            self.assertEqual(load_dotenv_values(env_path)["lama_apikey"], "hf_test_token")
 
 
 if __name__ == "__main__":

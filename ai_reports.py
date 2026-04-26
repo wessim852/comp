@@ -8,12 +8,15 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
 
-DEFAULT_MODEL = "local-deterministic"
+DEFAULT_BASE_URL = "https://router.huggingface.co/v1"
+DEFAULT_MODEL = "meta-llama/Llama-3.1-8B-Instruct:novita"
+DOTENV_PATH = Path(".env")
 DEFAULT_SYSTEM_PROMPT = (
     "Tu es un assistant d'exploitation Smart City. "
     "Redige un rapport operationnel concis en francais et propose des actions prioritaires."
@@ -25,21 +28,68 @@ POLLUTION_CRITICAL_THRESHOLD = 100.0
 @dataclass(frozen=True)
 class AIProviderConfig:
     api_key: str = ""
-    base_url: str = ""
+    base_url: str = DEFAULT_BASE_URL
     model: str = DEFAULT_MODEL
     timeout_seconds: int = 30
 
     @classmethod
     def from_env(cls) -> "AIProviderConfig":
+        dotenv_values = load_dotenv_values()
         return cls(
-            api_key=os.getenv("AI_REPORT_API_KEY", ""),
-            base_url=os.getenv("AI_REPORT_BASE_URL", ""),
-            model=os.getenv("AI_REPORT_MODEL", DEFAULT_MODEL),
+            api_key=_first_config_value(
+                dotenv_values,
+                "lama_apikey",
+                "HF_TOKEN",
+                "AI_REPORT_API_KEY",
+                "HUGGINGFACEHUB_API_TOKEN",
+                "LLAMA_APIKEY",
+            ),
+            base_url=_first_config_value(
+                dotenv_values,
+                "AI_REPORT_BASE_URL",
+                default=DEFAULT_BASE_URL,
+            ),
+            model=_first_config_value(
+                dotenv_values,
+                "AI_REPORT_MODEL",
+                "HF_REPORT_MODEL",
+                default=DEFAULT_MODEL,
+            ),
         )
 
     @property
     def enabled(self) -> bool:
         return bool(self.api_key.strip() and self.base_url.strip() and self.model.strip())
+
+
+def load_dotenv_values(path: Path | None = None) -> dict[str, str]:
+    path = path or DOTENV_PATH
+    if not path.exists():
+        return {}
+
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip("'\"")
+    return values
+
+
+def _first_config_value(
+    dotenv_values: dict[str, str],
+    *keys: str,
+    default: str = "",
+) -> str:
+    for key in keys:
+        dotenv_value = dotenv_values.get(key)
+        if dotenv_value:
+            return dotenv_value
+        env_value = os.getenv(key)
+        if env_value:
+            return env_value
+    return default
 
 
 def _safe_float(value: Any) -> float | None:

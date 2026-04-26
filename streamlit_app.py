@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import mysql.connector
 import pandas as pd
@@ -10,7 +11,13 @@ import streamlit as st
 from mysql.connector import Error
 
 from ai_reports import AIProviderConfig, build_report_context, generate_ai_report
-from automata import AUTOMATA, available_events, detect_sensor_value_alerts, validate_sequence
+from automata import (
+    AUTOMATA,
+    available_events,
+    build_automaton_dot,
+    detect_sensor_value_alerts,
+    validate_sequence,
+)
 from seed_data import (
     REFERENCE_CITIZENS,
     REFERENCE_MEASURES,
@@ -27,7 +34,7 @@ from seed_data import (
 from sql_compiler import FrenchSQLCompiler
 
 
-APP_TITLE = "CompCodex MySQL Console"
+APP_TITLE = "projet compilation"
 DATABASE_NAME = "compcodex_db"
 CAPTEUR_ETATS = ["inactif", "actif", "signale", "en maintenance", "hors service"]
 VEHICULE_ETATS = ["stationne", "en route", "en panne", "arrive"]
@@ -36,6 +43,11 @@ AUTOMATA_DEFAULT_EVENTS = {
     "capteur": "installation, detection anomalie, reparation",
     "intervention": "assigner tech1, valider tech2, valider ia, cloturer",
     "vehicule": "demarrer, panne, reparer, arrive",
+}
+AUTOMATA_ARTIFACTS = {
+    "capteur": Path("artifacts/diagramme1.png"),
+    "intervention": Path("artifacts/schema2comp.png"),
+    "vehicule": Path("artifacts/schema3comp.png"),
 }
 
 
@@ -484,6 +496,28 @@ def render_automata_tab(
                 st.error(error)
 
     st.divider()
+    st.subheader("Visualisation")
+    st.caption("Cyan: état initial. Vert: transitions parcourues. Rouge: état courant final.")
+
+    artifact_path = AUTOMATA_ARTIFACTS.get(entity_type)
+    graph_col, artifact_col = st.columns([2, 1])
+    with graph_col:
+        st.graphviz_chart(
+            build_automaton_dot(
+                entity_type,
+                initial_state=initial_state,
+                history=result.history,
+                current_state=result.current_state,
+            ),
+            width="stretch",
+        )
+    with artifact_col:
+        if artifact_path and artifact_path.exists():
+            st.image(str(artifact_path), caption=f"Schéma source: {entity_type}")
+        else:
+            st.info("Aucun diagramme source trouvé dans `artifacts/` pour cette entité.")
+
+    st.divider()
     st.subheader("Actions automatiques")
     st.caption("Seuil de simulation: 1 minute sans valeur.")
 
@@ -522,33 +556,39 @@ def render_ai_reports_tab(
         return
 
     with st.expander("Configuration du modèle", expanded=False):
+        env_config = AIProviderConfig.from_env()
         st.caption(
-            "Compatible avec les APIs de type OpenAI Chat Completions. "
-            "Sans configuration complète, l'application utilise le générateur local."
+            "Utilise Hugging Face Inference Providers avec Llama 3.1. "
+            "Le token est lu depuis `.env` (`lama_apikey`) ou `HF_TOKEN`; sans token, le générateur local est utilisé."
         )
         col_model, col_url = st.columns([1, 2])
         with col_model:
             model = st.text_input(
                 "Modèle",
-                value="",
-                placeholder="grok-..., kimi-k2.6...",
+                value=env_config.model,
+                placeholder="meta-llama/Llama-3.1-8B-Instruct:novita",
             )
         with col_url:
             base_url = st.text_input(
-                "Base URL",
-                value="",
-                placeholder="https://.../v1",
+                "Hugging Face base URL",
+                value=env_config.base_url,
+                placeholder="https://router.huggingface.co/v1",
             )
-        api_key = st.text_input("API key", type="password", value="")
+        api_key = st.text_input(
+            "HF token",
+            type="password",
+            value="",
+            placeholder="Lu depuis .env si vide",
+        )
 
     if st.button("Générer le rapport IA", type="primary", width="stretch"):
         try:
             sensors, interventions, polluted_zones = load_ai_report_frames(settings)
             context = build_report_context(sensors, interventions, polluted_zones)
             config = AIProviderConfig(
-                api_key=api_key,
-                base_url=base_url,
-                model=model or "local-deterministic",
+                api_key=api_key or env_config.api_key,
+                base_url=base_url or env_config.base_url,
+                model=model or env_config.model,
             )
             result = generate_ai_report(context, config)
             st.session_state["ai_report_result"] = result
@@ -612,10 +652,6 @@ def main() -> None:
             with right:
                 preview = load_table_preview(settings, selected_table, preview_limit)
                 st.dataframe(preview, width="stretch", height=520)
-
-            if counts["mesure"] > 0:
-                st.subheader("Aperçu analytique des mesures")
-                st.dataframe(load_stats(settings), width="stretch", height=320)
 
     with tab_seed:
         if db_error is not None:
