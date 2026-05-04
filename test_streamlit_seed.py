@@ -4,6 +4,7 @@ from seed_data import (
     REFERENCE_MEASURES,
     attach_measure_ids_to_capteurs,
     generate_citizen_rows,
+    generate_live_measure_row,
     generate_measure_and_capteur_rows,
     generate_measure_rows,
     generate_standalone_measure_rows,
@@ -41,6 +42,20 @@ class StreamlitSeedTests(unittest.TestCase):
         self.assertEqual(len(capteur_rows), 100)
         self.assertEqual(len(attached_rows), 100)
         self.assertEqual(attached_rows[0][-1], 1)
+
+    def test_live_measure_generation_keeps_temperature_in_range(self) -> None:
+        value, unit, measure_type, timestamp = generate_live_measure_row(
+            sensor_type="temperature",
+            sensor_state="actif",
+            current_value=25.0,
+        )
+
+        self.assertIsNotNone(value)
+        self.assertEqual(unit, "C")
+        self.assertEqual(measure_type, "temperature")
+        self.assertEqual(timestamp.second, 0)
+        self.assertGreaterEqual(value, 14.0)
+        self.assertLessEqual(value, 39.0)
 
 
 if __name__ == "__main__":

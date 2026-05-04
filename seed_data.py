@@ -107,6 +107,47 @@ def generate_single_measure_row(
     return (round(random.uniform(low, high), 2), unit, resolved_type, timestamp)
 
 
+def generate_live_measure_row(
+    sensor_type: str,
+    sensor_state: str,
+    current_value: float | None = None,
+    timestamp: datetime | None = None,
+) -> tuple[float | None, str, str, datetime]:
+    resolved_timestamp = (timestamp or datetime.now()).replace(second=0, microsecond=0)
+    unit, low, high = sensor_measure_profile(sensor_type)
+
+    if sensor_state == "hors service":
+        return (None, unit, sensor_type, resolved_timestamp)
+
+    baseline = random.uniform(low, high) if current_value is None else float(current_value)
+    if sensor_type == "pollution":
+        variation = random.uniform(-8.0, 8.0)
+        if 7 <= resolved_timestamp.hour <= 9 or 17 <= resolved_timestamp.hour <= 20:
+            variation += random.uniform(8.0, 18.0)
+        upper_bound = high + 40.0
+    elif sensor_type == "temperature":
+        variation = random.uniform(-2.5, 2.5)
+        if 11 <= resolved_timestamp.hour <= 16:
+            variation += random.uniform(1.0, 3.0)
+        elif 0 <= resolved_timestamp.hour <= 5:
+            variation -= random.uniform(1.0, 2.5)
+        upper_bound = high
+    elif sensor_type == "humidite":
+        variation = random.uniform(-6.0, 6.0)
+        upper_bound = high
+    elif sensor_type == "bruit":
+        variation = random.uniform(-5.0, 5.0)
+        if 8 <= resolved_timestamp.hour <= 18:
+            variation += random.uniform(3.0, 8.0)
+        upper_bound = high
+    else:
+        variation = random.uniform(-4.0, 4.0)
+        upper_bound = high
+
+    value = max(low, min(upper_bound, baseline + variation))
+    return (round(value, 2), unit, sensor_type, resolved_timestamp)
+
+
 def generate_standalone_measure_rows(
     count: int,
 ) -> list[tuple[float | None, str, str, datetime]]:

@@ -714,6 +714,15 @@ def main() -> None:
             per_sensor = st.slider("Mesures par capteur", min_value=12, max_value=720, value=48, step=12)
             step_minutes = st.select_slider("Intervalle temporel", options=[5, 10, 15, 30, 60], value=30)
             st.caption("Les capteurs `hors service` ne génèrent pas de mesures. Le schéma relie chaque capteur à une mesure courante via `id_mesure`.")
+            st.code(
+                "python3 sensor_simulator.py --user root --password <mot_de_passe> --interval-minutes 30\n"
+                "python3 sensor_simulator.py --user root --password <mot_de_passe> --interval-minutes 1",
+                language="bash",
+            )
+            st.caption(
+                "La première commande met a jour les valeurs courantes dans `mesure` toutes les 30 minutes. "
+                "La seconde garde le meme comportement avec un cycle d'une minute pour les tests, sans creer de nouvelles lignes."
+            )
 
             if st.button("Générer des mesures", type="primary", width="stretch"):
                 try:
